@@ -1,0 +1,6 @@
+{
+  "name": "WIRD | وِرد",
+  "description": "تطبيق وِرد لأذكار الصباح والمساء ببطاقات تفاعلية ملونة، عداد تسبيح متقن، نصوص شرعية موثقة، إشعارات حقيقية، وعمل كامل دون اتصال.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

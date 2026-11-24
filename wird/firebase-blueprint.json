@@ -1,0 +1,165 @@
+{
+  "entities": {
+    "AdhkarEntry": {
+      "title": "AdhkarEntry",
+      "description": "Verified Islamic Dhikr record with authentic source grading.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "period": { "type": "string", "enum": ["morning", "evening", "both", "after_prayer"] },
+        "title": { "type": "string", "maxLength": 160 },
+        "arabicText": { "type": "string", "maxLength": 4000 },
+        "targetCount": { "type": "integer" },
+        "meaning": { "type": "string", "maxLength": 2000 },
+        "establishedVirtue": { "type": "string", "maxLength": 2000 },
+        "sourceCollection": { "type": "string", "maxLength": 120 },
+        "hadithOrVerseRef": { "type": "string", "maxLength": 160 },
+        "authenticityGrade": { "type": "string", "maxLength": 120 },
+        "sourceUrl": { "type": "string", "maxLength": 500 },
+        "verificationStatus": { "type": "string", "enum": ["verified", "scholarly_note"] }
+      },
+      "required": ["id", "period", "title", "arabicText", "targetCount", "meaning", "sourceCollection", "hadithOrVerseRef", "authenticityGrade", "verificationStatus"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Publicly minimal user profile for optional cross-device synchronization.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "maxLength": 80 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Isolated PII document for user email address.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 254 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "updatedAt"]
+    },
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "User reading, accessibility, theme, and reminder schedule preferences.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "theme": { "type": "string", "enum": ["light", "dark", "system"] },
+        "fontSize": { "type": "string", "enum": ["sm", "md", "lg", "xl"] },
+        "hapticsEnabled": { "type": "boolean" },
+        "reducedMotion": { "type": "boolean" },
+        "quietModeDefault": { "type": "boolean" },
+        "morningEnabled": { "type": "boolean" },
+        "eveningEnabled": { "type": "boolean" },
+        "morningTime": { "type": "string", "maxLength": 5, "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+        "eveningTime": { "type": "string", "maxLength": 5, "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+        "timezone": { "type": "string", "maxLength": 64 },
+        "quietHoursEnabled": { "type": "boolean" },
+        "quietHoursStart": { "type": "string", "maxLength": 5, "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+        "quietHoursEnd": { "type": "string", "maxLength": 5, "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "theme", "fontSize", "hapticsEnabled", "reducedMotion", "quietModeDefault", "morningEnabled", "eveningEnabled", "morningTime", "eveningTime", "timezone", "quietHoursEnabled", "quietHoursStart", "quietHoursEnd", "createdAt", "updatedAt"]
+    },
+    "ReadingSession": {
+      "title": "ReadingSession",
+      "description": "Daily morning or evening Adhkar reading progress and completion record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "period": { "type": "string", "enum": ["morning", "evening"] },
+        "dateKey": { "type": "string", "maxLength": 10, "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "currentIndex": { "type": "integer" },
+        "counts": { "type": "object" },
+        "completedIds": { "type": "array" },
+        "skippedIds": { "type": "array" },
+        "isCompleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "period", "dateKey", "currentIndex", "counts", "completedIds", "skippedIds", "isCompleted", "createdAt", "updatedAt"]
+    },
+    "FavoriteDhikr": {
+      "title": "FavoriteDhikr",
+      "description": "User saved favorite Dhikr reference.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "dhikrId": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "dhikrId", "createdAt"]
+    },
+    "PushSubscriptionMeta": {
+      "title": "PushSubscriptionMeta",
+      "description": "Metadata mirror for a registered Web Push subscription device.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "deviceId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "endpointHash": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "platform": { "type": "string", "maxLength": 40 },
+        "timezone": { "type": "string", "maxLength": 64 },
+        "morningEnabled": { "type": "boolean" },
+        "eveningEnabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "deviceId", "endpointHash", "platform", "timezone", "morningEnabled", "eveningEnabled", "createdAt", "updatedAt"]
+    },
+    "NotificationDelivery": {
+      "title": "NotificationDelivery",
+      "description": "Server-generated push delivery audit record for duplicate prevention.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "deliveryKey": { "type": "string", "maxLength": 160 },
+        "period": { "type": "string", "enum": ["morning", "evening"] },
+        "dateKey": { "type": "string", "maxLength": 10 },
+        "status": { "type": "string", "enum": ["sent", "failed", "expired_removed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "deliveryKey", "period", "dateKey", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/adhkar/{dhikrId}": {
+      "schema": { "$ref": "#/entities/AdhkarEntry" },
+      "description": "Publicly readable curated Islamic Adhkar catalog."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Owner-only user profile without PII."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Split private PII document restricted strictly to document owner."
+    },
+    "/userPreferences/{userId}": {
+      "schema": { "$ref": "#/entities/UserPreferences" },
+      "description": "Owner-only reading and notification schedule preferences."
+    },
+    "/readingSessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/ReadingSession" },
+      "description": "Owner-only daily morning/evening session progress and completion history."
+    },
+    "/favorites/{favoriteId}": {
+      "schema": { "$ref": "#/entities/FavoriteDhikr" },
+      "description": "Owner-only saved favorite Adhkar."
+    },
+    "/pushSubscriptions/{subscriptionId}": {
+      "schema": { "$ref": "#/entities/PushSubscriptionMeta" },
+      "description": "Owner-only metadata mirror of browser Web Push subscriptions."
+    },
+    "/notificationDeliveries/{deliveryId}": {
+      "schema": { "$ref": "#/entities/NotificationDelivery" },
+      "description": "System-only delivery logs readable only by owner."
+    }
+  }
+}

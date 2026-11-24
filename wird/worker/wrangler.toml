@@ -1,0 +1,22 @@
+name = "wird-push-worker"
+main = "src/index.ts"
+compatibility_date = "2025-11-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wird-push-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[vars]
+VAPID_SUBJECT = "mailto:admin@wird.app"
+VAPID_PUBLIC_KEY = "REPLACE_WITH_YOUR_VAPID_PUBLIC_KEY"
+ALLOWED_ORIGINS = "https://gen-lang-client-0521174523.web.app,https://gen-lang-client-0521174523.firebaseapp.com"
+ALLOW_LOCAL_ORIGINS = "true"
+GRACE_MINUTES = "15"
+
+# Secrets MUST NEVER be added to this file. Set them via Wrangler CLI:
+# npx wrangler secret put VAPID_PRIVATE_KEY
+# npx wrangler secret put CRON_SECRET

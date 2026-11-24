@@ -1,0 +1,633 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  Home,
+  Heart,
+  BookOpen,
+  Bell,
+  Settings,
+  Sun,
+  Moon,
+  WifiOff,
+} from 'lucide-react';
+import type { User } from 'firebase/auth';
+import { registerSW } from 'virtual:pwa-register';
+import { getAdhkarByPeriod, type DhikrItem } from './data/adhkar';
+import {
+  appendHistoryRecord,
+  getOrCreateDeviceId,
+  getTodayDateKey,
+  loadFavorites,
+  loadHistory,
+  loadPreferences,
+  loadSessions,
+  saveFavorites,
+  savePreferences,
+  saveSessionProgress,
+  type FontSizeScale,
+  type HistoryRecord,
+  type SessionProgress,
+  type UserPreferencesState,
+} from './lib/storage';
+import {
+  fetchCloudFavorites,
+  fetchCloudPreferences,
+  signInWithGoogle,
+  signOutGoogle,
+  subscribeToAuth,
+  syncFavoriteToCloud,
+  syncPreferencesToCloud,
+  syncSessionToCloud,
+  testConnection,
+} from './lib/firebase';
+import {
+  checkAndFireLocalDueReminder,
+  syncSessionCompletionToWorker,
+} from './lib/push';
+import { usePWAInstall, useOnlineStatus } from './hooks/usePWAInstall';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { WirdLogoMark } from './components/Illustrations';
+import { HomeView, type AppRoute } from './components/HomeView';
+import { AdhkarSessionView } from './components/AdhkarSessionView';
+import { CompletionView } from './components/CompletionView';
+import {
+  FavoritesView,
+  HistoryView,
+  LibraryView,
+} from './components/CollectionViews';
+import { NotificationsView } from './components/NotificationsView';
+import {
+  InstallGuideView,
+  SettingsView,
+} from './components/InstallAndSettingsViews';
+
+export default function App() {
+  const [deviceId] = useState(() => getOrCreateDeviceId());
+  const [prefs, setPrefs] = useState<UserPreferencesState>(() => {
+    const loaded = loadPreferences();
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const sessionParam = params.get('session');
+      if (sessionParam === 'morning') return { ...loaded, theme: 'light' };
+      if (sessionParam === 'evening') return { ...loaded, theme: 'dark' };
+    }
+    return loaded;
+  });
+  const [favorites, setFavorites] = useState<string[]>(() => loadFavorites());
+  const [sessions, setSessions] = useState(() => loadSessions());
+  const [history, setHistory] = useState<HistoryRecord[]>(() => loadHistory());
+  const [user, setUser] = useState<User | null>(null);
+
+  const [route, setRoute] = useState<AppRoute>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const sessionParam = params.get('session');
+      if (sessionParam === 'morning' || sessionParam === 'evening') {
+        return sessionParam;
+      }
+    }
+    return 'home';
+  });
+
+  const [focusDhikrId, setFocusDhikrId] = useState<string | null>(null);
+  const [completedSummary, setCompletedSummary] = useState<{
+    period: 'morning' | 'evening';
+    completedCount: number;
+    skippedCount: number;
+    totalCount: number;
+  } | null>(null);
+
+  const { isInstalled } = usePWAInstall();
+  const isOnline = useOnlineStatus();
+  const [offlineReadyBanner, setOfflineReadyBanner] = useState(false);
+
+  const [systemPrefersDark, setSystemPrefersDark] = useState(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+      : false
+  );
+
+  const [systemReducedMotion, setSystemReducedMotion] = useState(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false
+  );
+
+  const isDark = prefs.theme === 'dark' || (prefs.theme === 'system' && systemPrefersDark);
+  const reducedMotion = prefs.reducedMotion || systemReducedMotion;
+
+  useEffect(() => {
+    registerSW({
+      immediate: true,
+      onOfflineReady() {
+        setOfflineReadyBanner(true);
+        setTimeout(() => setOfflineReadyBanner(false), 5000);
+      },
+    });
+  }, []);
+
+  // Foreground / open PWA schedule watcher (deduplicated per day + notification tag)
+  useEffect(() => {
+    checkAndFireLocalDueReminder(prefs, sessions).catch(() => {});
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        checkAndFireLocalDueReminder(prefs, sessions).catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = window.setInterval(() => {
+      checkAndFireLocalDueReminder(prefs, sessions).catch(() => {});
+    }, 20_000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(timer);
+    };
+  }, [prefs, sessions]);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; period?: string } | undefined;
+      if (data?.type === 'WIRD_NAVIGATE' && (data.period === 'morning' || data.period === 'evening')) {
+        setCompletedSummary(null);
+        setFocusDhikrId(null);
+        setPrefs((prev) => {
+          const next: UserPreferencesState = { ...prev, theme: data.period === 'evening' ? 'dark' : 'light' };
+          savePreferences(next);
+          return next;
+        });
+        setRoute(data.period);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handleMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handleMessage);
+  }, []);
+
+  useEffect(() => {
+    const darkMq = window.matchMedia('(prefers-color-scheme: dark)');
+    const motionMq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onDark = (e: MediaQueryListEvent) => setSystemPrefersDark(e.matches);
+    const onMotion = (e: MediaQueryListEvent) => setSystemReducedMotion(e.matches);
+    darkMq.addEventListener('change', onDark);
+    motionMq.addEventListener('change', onMotion);
+    return () => {
+      darkMq.removeEventListener('change', onDark);
+      motionMq.removeEventListener('change', onMotion);
+    };
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+      metaTheme.setAttribute('content', isDark ? '#000000' : '#FFFFFF');
+    }
+  }, [isDark]);
+
+  useEffect(() => {
+    testConnection();
+    const unsub = subscribeToAuth(async (nextUser) => {
+      setUser(nextUser);
+      if (nextUser) {
+        try {
+          const [cloudFavs, cloudPrefs] = await Promise.all([
+            fetchCloudFavorites(nextUser.uid),
+            fetchCloudPreferences(nextUser.uid),
+          ]);
+          if (cloudFavs.length > 0) {
+            setFavorites((prev) => {
+              const merged = Array.from(new Set([...prev, ...cloudFavs]));
+              saveFavorites(merged);
+              return merged;
+            });
+          }
+          if (cloudPrefs) {
+            setPrefs((prev) => {
+              const merged = { ...prev, ...cloudPrefs };
+              savePreferences(merged);
+              return merged;
+            });
+          }
+        } catch {
+          // Offline or permissions check handled cleanly
+        }
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const handleUpdatePrefs = useCallback(
+    (patch: Partial<UserPreferencesState>) => {
+      setPrefs((prev) => {
+        const next = { ...prev, ...patch };
+        savePreferences(next);
+        if (user) {
+          syncPreferencesToCloud(user.uid, next).catch(() => {});
+        }
+        return next;
+      });
+    },
+    [user]
+  );
+
+  // Coupling Night/Day theme strictly with Evening/Morning Adhkar experience
+  const handleSwitchPeriodMode = useCallback(
+    (period: 'morning' | 'evening') => {
+      const nextTheme = period === 'evening' ? 'dark' : 'light';
+      handleUpdatePrefs({ theme: nextTheme });
+      if (route === 'morning' || route === 'evening') {
+        setCompletedSummary(null);
+        setFocusDhikrId(null);
+        setRoute(period);
+      }
+    },
+    [handleUpdatePrefs, route]
+  );
+
+  const handleToggleTheme = () => {
+    handleSwitchPeriodMode(isDark ? 'morning' : 'evening');
+  };
+
+  const handleFontSizeCycle = () => {
+    const order: FontSizeScale[] = ['sm', 'md', 'lg', 'xl'];
+    const idx = order.indexOf(prefs.fontSize);
+    handleUpdatePrefs({ fontSize: order[(idx + 1) % order.length] });
+  };
+
+  const handleToggleFavorite = useCallback(
+    (dhikrId: string) => {
+      setFavorites((prev) => {
+        const exists = prev.includes(dhikrId);
+        const next = exists ? prev.filter((id) => id !== dhikrId) : [...prev, dhikrId];
+        saveFavorites(next);
+        if (user) {
+          syncFavoriteToCloud(user.uid, dhikrId, !exists).catch(() => {});
+        }
+        return next;
+      });
+    },
+    [user]
+  );
+
+  const cloudSyncTimerRef = React.useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (cloudSyncTimerRef.current !== null) {
+        window.clearTimeout(cloudSyncTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleSaveSessionProgress = useCallback(
+    (session: SessionProgress) => {
+      saveSessionProgress(session);
+      setSessions((prev) => ({ ...prev, [session.period]: session }));
+      if (user) {
+        if (cloudSyncTimerRef.current !== null) {
+          window.clearTimeout(cloudSyncTimerRef.current);
+        }
+        cloudSyncTimerRef.current = window.setTimeout(() => {
+          cloudSyncTimerRef.current = null;
+          syncSessionToCloud(user.uid, session).catch(() => {});
+        }, 1200);
+      }
+    },
+    [user]
+  );
+
+  const handleCompleteSession = useCallback(
+    (session: SessionProgress, items: DhikrItem[]) => {
+      saveSessionProgress(session);
+      setSessions((prev) => ({ ...prev, [session.period]: session }));
+
+      const record: HistoryRecord = {
+        id: `${session.period}_${session.dateKey}`,
+        period: session.period,
+        dateKey: session.dateKey,
+        completedCount: session.completedIds.length,
+        totalCount: items.length,
+        skippedCount: session.skippedIds.length,
+        completedAt: new Date().toISOString(),
+      };
+      const nextHistory = appendHistoryRecord(record);
+      setHistory(nextHistory);
+
+      if (user) {
+        syncSessionToCloud(user.uid, session).catch(() => {});
+      }
+      syncSessionCompletionToWorker(
+        deviceId,
+        session.period,
+        session.dateKey,
+        session.isCompleted
+      ).catch(() => {});
+
+      setCompletedSummary({
+        period: session.period,
+        completedCount: session.completedIds.length,
+        skippedCount: session.skippedIds.length,
+        totalCount: items.length,
+      });
+    },
+    [deviceId, user]
+  );
+
+  const handleNavigate = (nextRoute: AppRoute) => {
+    setCompletedSummary(null);
+    setFocusDhikrId(null);
+    if (nextRoute === 'morning') {
+      handleUpdatePrefs({ theme: 'light' });
+    } else if (nextRoute === 'evening') {
+      handleUpdatePrefs({ theme: 'dark' });
+    }
+    setRoute(nextRoute);
+    window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
+  };
+
+  const handleOpenDhikrFromLibrary = (item: DhikrItem) => {
+    setCompletedSummary(null);
+    setFocusDhikrId(item.id);
+    const targetPeriod: 'morning' | 'evening' = item.periods.includes(isDark ? 'evening' : 'morning')
+      ? isDark
+        ? 'evening'
+        : 'morning'
+      : item.periods.includes('morning')
+      ? 'morning'
+      : 'evening';
+    handleUpdatePrefs({ theme: targetPeriod === 'evening' ? 'dark' : 'light' });
+    setRoute(targetPeriod);
+  };
+
+  const todayKey = getTodayDateKey(prefs.timezone);
+  const inSession = route === 'morning' || route === 'evening';
+
+  return (
+    <ErrorBoundary>
+      <div className="min-h-screen flex flex-col bg-white dark:bg-black text-black dark:text-white transition-colors duration-200">
+        {/* Crisp Apple Glassmorphic Top Navigation Bar */}
+        <header className="sticky top-0 z-30 border-b border-black/[0.08] dark:border-white/[0.1] backdrop-blur-xl bg-white/85 dark:bg-black/85 pt-safe">
+          <div className="max-w-5xl mx-auto px-4 md:px-8 h-16 md:h-[72px] flex items-center justify-between gap-6">
+            {/* Zone 1: User's Official WIRD Logo */}
+            <button
+              type="button"
+              onClick={() => handleNavigate('home')}
+              aria-label="العودة إلى الرئيسية — وِرد"
+              className="flex items-center shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 rounded-xl py-1"
+            >
+              <WirdLogoMark className="h-11 md:h-12 w-auto" />
+            </button>
+
+            {/* Zone 2: Desktop Single-Line Links */}
+            <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-[#6E6E73] dark:text-[#98989D]">
+              {(
+                [
+                  { id: 'home', label: 'الرئيسية' },
+                  { id: 'favorites', label: 'المفضلة' },
+                  { id: 'library', label: 'المكتبة' },
+                  { id: 'history', label: 'السجل' },
+                  { id: 'notifications', label: 'التنبيهات' },
+                ] as Array<{ id: AppRoute; label: string }>
+              ).map((link) => (
+                <button
+                  key={link.id}
+                  type="button"
+                  onClick={() => handleNavigate(link.id)}
+                  className={`whitespace-nowrap shrink-0 py-1 border-b-2 transition-colors cursor-pointer ${
+                    route === link.id
+                      ? 'border-black dark:border-white text-black dark:text-white font-semibold'
+                      : 'border-transparent hover:text-black dark:hover:text-white'
+                  }`}
+                >
+                  {link.label}
+                </button>
+              ))}
+            </nav>
+
+            {/* Zone 3: Day/Night Mode Switch + Settings */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleToggleTheme}
+                title={isDark ? 'التبديل لوضع الصباح (أذكار الصباح)' : 'التبديل للوضع الليلي (أذكار المساء)'}
+                aria-label={isDark ? 'التبديل لوضع الصباح' : 'التبديل للوضع الليلي'}
+                className="min-h-[38px] px-3 rounded-xl flex items-center gap-1.5 text-xs font-semibold bg-[#F5F5F7] dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.1] hover:opacity-85 transition-opacity cursor-pointer"
+              >
+                {isDark ? (
+                  <>
+                    <Sun className="w-3.5 h-3.5 text-[#FFC900]" />
+                    <span className="hidden sm:inline">الصباح</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="w-3.5 h-3.5 text-[#4D6FF4]" />
+                    <span className="hidden sm:inline">الليلي</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleNavigate('settings')}
+                aria-label="الإعدادات"
+                className="min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 bg-black text-white dark:bg-white dark:text-black whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                <span>الإعدادات</span>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Apple Black & White Viewport */}
+        <main className="flex-1 w-full max-w-5xl mx-auto px-3.5 sm:px-6 md:px-8 pt-5 sm:pt-6 pb-24 md:pb-12">
+          {route === 'home' && (
+            <HomeView
+              isDark={isDark}
+              reducedMotion={reducedMotion}
+              morningSession={sessions.morning}
+              eveningSession={sessions.evening}
+              favoritesCount={favorites.length}
+              historyCount={history.length}
+              onNavigate={handleNavigate}
+              onSwitchPeriodMode={handleSwitchPeriodMode}
+              onOpenCompletion={(period) => {
+                const sess = sessions[period];
+                if (!sess) return;
+                setRoute(period);
+                setCompletedSummary({
+                  period,
+                  completedCount: sess.completedIds.length,
+                  skippedCount: sess.skippedIds.length,
+                  totalCount: getAdhkarByPeriod(period).length,
+                });
+              }}
+              isInstalled={isInstalled}
+            />
+          )}
+
+          {inSession && completedSummary && completedSummary.period === route && (
+            <CompletionView
+              period={completedSummary.period}
+              completedCount={completedSummary.completedCount}
+              skippedCount={completedSummary.skippedCount}
+              totalCount={completedSummary.totalCount}
+              isDark={isDark}
+              reducedMotion={reducedMotion}
+              onReturnHome={() => handleNavigate('home')}
+              onReviewAdhkar={() => {
+                setCompletedSummary(null);
+                setFocusDhikrId(null);
+              }}
+              onRestartSkipped={
+                completedSummary.skippedCount > 0
+                  ? () => {
+                      const activeSess = sessions[completedSummary.period];
+                      const firstSkipped = activeSess?.skippedIds[0] || null;
+                      setCompletedSummary(null);
+                      setFocusDhikrId(firstSkipped);
+                    }
+                  : undefined
+              }
+            />
+          )}
+
+          {inSession && (!completedSummary || completedSummary.period !== route) && (
+            <AdhkarSessionView
+              key={`${route}-${focusDhikrId || 'seq'}`}
+              period={route}
+              initialSession={sessions[route]}
+              dateKey={todayKey}
+              isDark={isDark}
+              fontSize={prefs.fontSize}
+              hapticsEnabled={prefs.hapticsEnabled}
+              reducedMotion={reducedMotion}
+              quietModeDefault={prefs.quietModeDefault}
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+              onFontSizeCycle={handleFontSizeCycle}
+              onSaveProgress={handleSaveSessionProgress}
+              onCompleteSession={handleCompleteSession}
+              onBackHome={() => handleNavigate('home')}
+              focusDhikrId={focusDhikrId}
+            />
+          )}
+
+          {route === 'favorites' && (
+            <FavoritesView
+              favorites={favorites}
+              isDark={isDark}
+              onToggleFavorite={handleToggleFavorite}
+              onOpenDhikr={handleOpenDhikrFromLibrary}
+              onBackHome={() => handleNavigate('home')}
+            />
+          )}
+
+          {route === 'library' && (
+            <LibraryView
+              isDark={isDark}
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+              onOpenDhikr={handleOpenDhikrFromLibrary}
+              onBackHome={() => handleNavigate('home')}
+            />
+          )}
+
+          {route === 'history' && (
+            <HistoryView
+              history={history}
+              isDark={isDark}
+              onBackHome={() => handleNavigate('home')}
+            />
+          )}
+
+          {route === 'notifications' && (
+            <NotificationsView
+              deviceId={deviceId}
+              userId={user?.uid}
+              prefs={prefs}
+              isDark={isDark}
+              onUpdatePrefs={handleUpdatePrefs}
+              onOpenInstallGuide={() => handleNavigate('install')}
+              onBackHome={() => handleNavigate('home')}
+            />
+          )}
+
+          {route === 'install' && (
+            <InstallGuideView
+              isDark={isDark}
+              onBackHome={() => handleNavigate('home')}
+            />
+          )}
+
+          {route === 'settings' && (
+            <SettingsView
+              prefs={prefs}
+              isDark={isDark}
+              user={user}
+              onUpdatePrefs={handleUpdatePrefs}
+              onGoogleSignIn={async () => {
+                await signInWithGoogle();
+              }}
+              onGoogleSignOut={async () => {
+                await signOutGoogle();
+              }}
+              onOpenNotifications={() => handleNavigate('notifications')}
+              onOpenInstallGuide={() => handleNavigate('install')}
+              onBackHome={() => handleNavigate('home')}
+            />
+          )}
+        </main>
+
+        {/* Offline Connectivity & Ready Toast */}
+        {!isOnline && (
+          <div className="fixed bottom-20 md:bottom-5 left-4 z-50 flex items-center gap-2 rounded-2xl bg-black text-white dark:bg-white dark:text-black px-4 py-2.5 text-xs font-semibold shadow-lg">
+            <WifiOff className="w-3.5 h-3.5 shrink-0" />
+            <span>وضع عدم الاتصال — جميع الأذكار والعدادات تعمل بدون نت</span>
+          </div>
+        )}
+        {isOnline && offlineReadyBanner && (
+          <div className="fixed bottom-20 md:bottom-5 left-4 z-50 flex items-center gap-2 rounded-2xl bg-[#81BC00] text-white px-4 py-2 text-xs font-semibold shadow-lg">
+            <span>التطبيق جاهز الآن للعمل بدون إنترنت ✓</span>
+          </div>
+        )}
+
+        {/* Mobile Bottom Tab Bar */}
+        {!inSession && (
+          <nav
+            aria-label="التنقل السريع"
+            className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-black/[0.08] dark:border-white/[0.1] backdrop-blur-xl bg-white/90 dark:bg-black/90 pb-safe"
+          >
+            <div className="grid grid-cols-4 h-14">
+              {(
+                [
+                  { id: 'home', label: 'الرئيسية', icon: Home },
+                  { id: 'favorites', label: 'المفضلة', icon: Heart },
+                  { id: 'library', label: 'المكتبة', icon: BookOpen },
+                  { id: 'notifications', label: 'التنبيهات', icon: Bell },
+                ] as const
+              ).map((tab) => {
+                const Icon = tab.icon;
+                const active = route === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => handleNavigate(tab.id)}
+                    className={`flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                      active
+                        ? 'text-black dark:text-white font-semibold'
+                        : 'text-[#8E8E93]'
+                    }`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="text-[10px]">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        )}
+      </div>
+    </ErrorBoundary>
+  );
+}

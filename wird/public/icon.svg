@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBF5E6" />
+      <stop offset="50%" stop-color="#FCE6EE" />
+      <stop offset="100%" stop-color="#ECE7FC" />
+    </linearGradient>
+    <radialGradient id="glowWarm" cx="30%" cy="28%" r="55%">
+      <stop offset="0%" stop-color="#FDE68A" stop-opacity="0.7" />
+      <stop offset="100%" stop-color="#FDE68A" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="glowMint" cx="75%" cy="75%" r="50%">
+      <stop offset="0%" stop-color="#BDEBD6" stop-opacity="0.65" />
+      <stop offset="100%" stop-color="#BDEBD6" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <rect width="512" height="512" rx="112" fill="url(#glowWarm)" />
+  <rect width="512" height="512" rx="112" fill="url(#glowMint)" />
+
+  <!-- Eight-petal pastel rosette representing WIRD's full color collection -->
+  <g transform="translate(256, 256)">
+    <ellipse cx="0" cy="-94" rx="34" ry="64" fill="#FDE68A" opacity="0.92" />
+    <ellipse cx="0" cy="-94" rx="34" ry="64" fill="#FCD5B5" opacity="0.92" transform="rotate(45)" />
+    <ellipse cx="0" cy="-94" rx="34" ry="64" fill="#FAD2E1" opacity="0.92" transform="rotate(90)" />
+    <ellipse cx="0" cy="-94" rx="34" ry="64" fill="#DCD3F8" opacity="0.92" transform="rotate(135)" />
+    <ellipse cx="0" cy="-94" rx="34" ry="64" fill="#A8D5EE" opacity="0.92" transform="rotate(180)" />
+    <ellipse cx="0" cy="-94" rx="34" ry="64" fill="#BDEBD6" opacity="0.92" transform="rotate(225)" />
+    <ellipse cx="0" cy="-94" rx="34" ry="64" fill="#C2E5B4" opacity="0.92" transform="rotate(270)" />
+    <ellipse cx="0" cy="-94" rx="34" ry="64" fill="#F9A89B" opacity="0.92" transform="rotate(315)" />
+
+    <circle cx="0" cy="0" r="68" fill="#FBF5E6" stroke="#E6DDD0" stroke-width="4" />
+    <!-- Serene crescent & star motif -->
+    <path d="M 14 -34 A 34 34 0 1 0 14 34 A 25 25 0 1 1 14 -34 Z" fill="#38286E" />
+    <circle cx="22" cy="-10" r="5.5" fill="#F8CE70" />
+  </g>
+</svg>

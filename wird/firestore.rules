@@ -1,0 +1,301 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connection validation helper document
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // Shared hardened primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimeStr(t) {
+      return t is string && t.size() == 5 && t.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+    }
+
+    function isValidDateKey(d) {
+      return d is string && d.size() == 10 && d.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    // Validation blueprints
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid == request.auth.uid && data.uid.size() <= 128
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivateInfo(data) {
+      return data.keys().hasAll(['uid', 'email', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'updatedAt'])
+        && data.uid is string && data.uid == request.auth.uid && data.uid.size() <= 128
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserPreferences(data) {
+      return data.keys().hasAll([
+          'userId', 'theme', 'fontSize', 'hapticsEnabled', 'reducedMotion',
+          'quietModeDefault', 'morningEnabled', 'eveningEnabled',
+          'morningTime', 'eveningTime', 'timezone',
+          'quietHoursEnabled', 'quietHoursStart', 'quietHoursEnd',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'theme', 'fontSize', 'hapticsEnabled', 'reducedMotion',
+          'quietModeDefault', 'morningEnabled', 'eveningEnabled',
+          'morningTime', 'eveningTime', 'timezone',
+          'quietHoursEnabled', 'quietHoursStart', 'quietHoursEnd',
+          'createdAt', 'updatedAt'
+        ])
+        && data.userId is string && data.userId == request.auth.uid && data.userId.size() <= 128
+        && data.theme in ['light', 'dark', 'system']
+        && data.fontSize in ['sm', 'md', 'lg', 'xl']
+        && data.hapticsEnabled is bool
+        && data.reducedMotion is bool
+        && data.quietModeDefault is bool
+        && data.morningEnabled is bool
+        && data.eveningEnabled is bool
+        && isValidTimeStr(data.morningTime)
+        && isValidTimeStr(data.eveningTime)
+        && data.timezone is string && data.timezone.size() >= 2 && data.timezone.size() <= 64
+        && data.quietHoursEnabled is bool
+        && isValidTimeStr(data.quietHoursStart)
+        && isValidTimeStr(data.quietHoursEnd)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStringList(arr, maxLen) {
+      return arr is list
+        && arr.size() <= maxLen
+        && (arr.size() == 0 || (arr[0] is string && arr[0].size() <= 64));
+    }
+
+    function isValidReadingSession(data) {
+      return data.keys().hasAll([
+          'userId', 'period', 'dateKey', 'currentIndex', 'counts',
+          'completedIds', 'skippedIds', 'isCompleted', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'period', 'dateKey', 'currentIndex', 'counts',
+          'completedIds', 'skippedIds', 'isCompleted', 'createdAt', 'updatedAt'
+        ])
+        && data.userId is string && data.userId == request.auth.uid && data.userId.size() <= 128
+        && data.period in ['morning', 'evening']
+        && isValidDateKey(data.dateKey)
+        && data.currentIndex is int && data.currentIndex >= 0 && data.currentIndex <= 100
+        && data.counts is map && data.counts.size() <= 60
+        && isValidStringList(data.completedIds, 60)
+        && isValidStringList(data.skippedIds, 60)
+        && data.isCompleted is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFavorite(data) {
+      return data.keys().hasAll(['userId', 'dhikrId', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'dhikrId', 'createdAt'])
+        && data.userId is string && data.userId == request.auth.uid && data.userId.size() <= 128
+        && isValidId(data.dhikrId) && data.dhikrId.size() <= 64
+        && data.createdAt is timestamp;
+    }
+
+    function isValidPushSubscriptionMeta(data) {
+      return data.keys().hasAll([
+          'userId', 'deviceId', 'endpointHash', 'platform',
+          'timezone', 'morningEnabled', 'eveningEnabled', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'deviceId', 'endpointHash', 'platform',
+          'timezone', 'morningEnabled', 'eveningEnabled', 'createdAt', 'updatedAt'
+        ])
+        && data.userId is string && data.userId == request.auth.uid && data.userId.size() <= 128
+        && isValidId(data.deviceId)
+        && isValidId(data.endpointHash)
+        && data.platform is string && data.platform.size() >= 1 && data.platform.size() <= 40
+        && data.timezone is string && data.timezone.size() >= 2 && data.timezone.size() <= 64
+        && data.morningEnabled is bool
+        && data.eveningEnabled is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Verified Religious Adhkar Catalog (Public Read-Only)
+    match /adhkar/{dhikrId} {
+      allow get: if isValidId(dhikrId);
+      allow list: if true;
+      allow create, update, delete: if false;
+    }
+
+    // User Profile (No PII)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt']);
+      allow delete: if isVerifiedUser() && isValidId(userId) && isOwner(userId);
+
+      // Split Private PII Subcollection
+      match /private/{docId} {
+        allow get: if isValidId(userId) && isValidId(docId) && docId == 'info' && isOwner(userId) && isVerifiedUser();
+        allow list: if false;
+        allow create: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(docId)
+          && docId == 'info'
+          && isOwner(userId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && isValidUserPrivateInfo(incoming())
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(docId)
+          && docId == 'info'
+          && isOwner(userId)
+          && isValidUserPrivateInfo(incoming())
+          && incoming().uid == existing().uid
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
+        allow delete: if isVerifiedUser() && isValidId(userId) && isValidId(docId) && isOwner(userId);
+      }
+    }
+
+    // User Preferences
+    match /userPreferences/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserPreferences(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserPreferences(incoming())
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['theme', 'fontSize', 'hapticsEnabled', 'reducedMotion', 'quietModeDefault', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['morningEnabled', 'eveningEnabled', 'morningTime', 'eveningTime', 'timezone', 'quietHoursEnabled', 'quietHoursStart', 'quietHoursEnd', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'theme', 'fontSize', 'hapticsEnabled', 'reducedMotion', 'quietModeDefault',
+            'morningEnabled', 'eveningEnabled', 'morningTime', 'eveningTime',
+            'timezone', 'quietHoursEnabled', 'quietHoursStart', 'quietHoursEnd', 'updatedAt'
+          ])
+        );
+      allow delete: if isVerifiedUser() && isValidId(userId) && isOwner(userId);
+    }
+
+    // Reading Sessions & History
+    match /readingSessions/{sessionId} {
+      allow get: if isValidId(sessionId) && isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(sessionId)
+        && isValidReadingSession(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(sessionId)
+        && existing().userId == request.auth.uid
+        && existing().isCompleted == false
+        && isValidReadingSession(incoming())
+        && incoming().userId == existing().userId
+        && incoming().period == existing().period
+        && incoming().dateKey == existing().dateKey
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['currentIndex', 'counts', 'completedIds', 'skippedIds', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['currentIndex', 'counts', 'completedIds', 'skippedIds', 'isCompleted', 'updatedAt'])
+        );
+      allow delete: if isVerifiedUser() && isValidId(sessionId) && existing().userId == request.auth.uid;
+    }
+
+    // Saved Favorites
+    match /favorites/{favoriteId} {
+      allow get: if isValidId(favoriteId) && isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(favoriteId)
+        && isValidFavorite(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(favoriteId) && existing().userId == request.auth.uid;
+    }
+
+    // Push Subscription Metadata Mirror
+    match /pushSubscriptions/{subscriptionId} {
+      allow get: if isValidId(subscriptionId) && isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(subscriptionId)
+        && isValidPushSubscriptionMeta(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(subscriptionId)
+        && existing().userId == request.auth.uid
+        && isValidPushSubscriptionMeta(incoming())
+        && incoming().userId == existing().userId
+        && incoming().deviceId == existing().deviceId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['endpointHash', 'platform', 'timezone', 'morningEnabled', 'eveningEnabled', 'updatedAt']);
+      allow delete: if isVerifiedUser() && isValidId(subscriptionId) && existing().userId == request.auth.uid;
+    }
+
+    // Notification Delivery Audit (System-only writes)
+    match /notificationDeliveries/{deliveryId} {
+      allow get: if isValidId(deliveryId) && isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+  }
+}

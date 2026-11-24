@@ -1,0 +1,197 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * ============================================================================
+ * WIRD | وِرد — Thmanyah Serif Typography + Apple Black & White Shell
+ * ============================================================================
+ */
+
+@font-face {
+  font-family: 'Thmanyah Serif Display';
+  src: url('/fonts/thmanyah/thmanyah-serif-display-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Thmanyah Serif Display';
+  src: url('/fonts/thmanyah/thmanyah-serif-display-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Thmanyah Serif Display';
+  src: url('/fonts/thmanyah/thmanyah-serif-display-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Thmanyah Serif Text';
+  src: url('/fonts/thmanyah/thmanyah-serif-text-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Thmanyah Serif Text';
+  src: url('/fonts/thmanyah/thmanyah-serif-text-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Thmanyah Serif Text';
+  src: url('/fonts/thmanyah/thmanyah-serif-text-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Thmanyah Sans';
+  src: url('/fonts/thmanyah/thmanyah-sans-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Thmanyah Sans';
+  src: url('/fonts/thmanyah/thmanyah-sans-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Thmanyah Sans';
+  src: url('/fonts/thmanyah/thmanyah-sans-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-arabic-display: 'Thmanyah Serif Display', 'Thmanyah Serif Text', 'Amiri', serif;
+  --font-arabic-body: 'Thmanyah Serif Text', 'Thmanyah Sans', -apple-system, BlinkMacSystemFont, serif;
+  --font-arabic-quran: 'Thmanyah Serif Text', 'Amiri', serif;
+  --font-numeric: 'Thmanyah Serif Text', 'Plus Jakarta Sans', sans-serif;
+
+  /* Apple Crisp Black & White App Shell (Morning / Light Mode) */
+  --wird-canvas: #FFFFFF;
+  --wird-canvas-elevated: #F5F5F7;
+  --wird-surface-muted: #EFEFF2;
+  --wird-border: rgba(0, 0, 0, 0.08);
+  --wird-ink: #000000;
+  --wird-ink-muted: #6E6E73;
+}
+
+.dark {
+  /* Apple Crisp Black & White App Shell (Evening / Night Mode) */
+  --wird-canvas: #000000;
+  --wird-canvas-elevated: #1C1C1E;
+  --wird-surface-muted: #2C2C2E;
+  --wird-border: rgba(255, 255, 255, 0.12);
+  --wird-ink: #FFFFFF;
+  --wird-ink-muted: #98989D;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-arabic-body);
+    background-color: var(--wird-canvas);
+    color: var(--wird-ink);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    font-family: var(--font-arabic-body);
+    background-color: var(--wird-canvas);
+    color: var(--wird-ink);
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  input[type='time'] {
+    -webkit-appearance: none;
+    appearance: none;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    background-color: transparent;
+  }
+
+  input[type='time']::-webkit-date-and-time-value {
+    text-align: center;
+    margin: 0 auto;
+  }
+
+  input[type='time']::-webkit-datetime-edit,
+  input[type='time']::-webkit-datetime-edit-fields-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 0 auto;
+  }
+}
+
+.font-arabic-display {
+  font-family: var(--font-arabic-display);
+}
+
+.font-arabic-body {
+  font-family: var(--font-arabic-body);
+}
+
+.font-arabic-quran {
+  font-family: var(--font-arabic-quran);
+}
+
+.font-numeric {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+}
+
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.pt-safe {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+/* Apple-grade subtle elevation for cards */
+.shadow-card-apple {
+  box-shadow:
+    0 20px 44px -16px rgba(0, 0, 0, 0.14),
+    0 4px 12px -2px rgba(0, 0, 0, 0.05);
+}
+
+.dark .shadow-card-apple {
+  box-shadow:
+    0 24px 48px -14px rgba(0, 0, 0, 0.72),
+    0 4px 12px -2px rgba(0, 0, 0, 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
